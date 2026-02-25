@@ -78,13 +78,15 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // ── /admin/* ─────────────────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
+    // Allow the login page itself through without auth check
+    if (pathname === "/admin/login") return NextResponse.next();
     const token = request.cookies.get("admin_token")?.value;
-    if (!token) return redirectTo(request, "/login");
+    if (!token) return redirectTo(request, "/admin/login");
     const payload = await verifyToken(token, ADMIN_JWT_SECRET, {
       audience: "admin_portal",
     });
     if (!payload || !ADMIN_ROLES.has(payload.role ?? ""))
-      return redirectTo(request, "/login");
+      return redirectTo(request, "/admin/login");
     return NextResponse.next();
   }
 

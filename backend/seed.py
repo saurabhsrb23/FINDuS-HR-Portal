@@ -999,6 +999,66 @@ async def seed3(session) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Module 8: Admin portal seed
+# ---------------------------------------------------------------------------
+
+async def seed_admin_users() -> None:
+    """Seed the three default admin portal users (idempotent)."""
+    from app.models.admin import AdminRole, AdminUser
+    from sqlalchemy import select
+
+    ADMIN_SEEDS = [
+        {
+            "id": uuid.UUID("00000000-0000-0000-0000-a00000000001"),
+            "email": "superadmin@donehr.com",
+            "password": "SuperAdmin@2024!",
+            "pin": "123456",
+            "full_name": "Super Admin",
+            "role": AdminRole.SUPERADMIN,
+        },
+        {
+            "id": uuid.UUID("00000000-0000-0000-0000-a00000000002"),
+            "email": "admin@donehr.com",
+            "password": "Admin@2024!",
+            "pin": "654321",
+            "full_name": "Platform Admin",
+            "role": AdminRole.ADMIN,
+        },
+        {
+            "id": uuid.UUID("00000000-0000-0000-0000-a00000000003"),
+            "email": "elite@donehr.com",
+            "password": "Elite@2024!",
+            "pin": "111111",
+            "full_name": "Elite Viewer",
+            "role": AdminRole.ELITE_ADMIN,
+        },
+    ]
+
+    async with AsyncSessionLocal() as session:
+        for seed_data in ADMIN_SEEDS:
+            result = await session.execute(
+                select(AdminUser).where(AdminUser.email == seed_data["email"])
+            )
+            existing = result.scalar_one_or_none()
+            if existing:
+                log.info("admin_seed_skipped", email=seed_data["email"])
+                continue
+            admin = AdminUser(
+                id=seed_data["id"],
+                email=seed_data["email"],
+                password_hash=hash_password(seed_data["password"]),
+                pin_hash=hash_password(seed_data["pin"]),
+                full_name=seed_data["full_name"],
+                role=seed_data["role"],
+                is_active=True,
+            )
+            session.add(admin)
+            log.info("admin_seed_created", email=seed_data["email"], role=seed_data["role"].value)
+        await session.commit()
+    log.info("admin_seed_complete")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -1025,6 +1085,9 @@ async def seed() -> None:
     # seed3 always runs — idempotent (adds data for candidate@donehr.com if missing)
     async with AsyncSessionLocal() as session:
         await seed3(session)
+
+    # seed admin portal users (Module 8) — always idempotent
+    await seed_admin_users()
 
 
 if __name__ == "__main__":
