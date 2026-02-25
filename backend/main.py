@@ -109,7 +109,21 @@ def create_app() -> FastAPI:
 
     # ---- Rate limiter state + exception handler ------------------------------
     application.state.limiter = limiter
-    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # Custom handler so 429 responses include CORS headers (slowapi's default
+    # handler bypasses CORSMiddleware and the browser blocks the response).
+    async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": f"Rate limit exceeded: {exc.detail}. Please wait and try again."},
+            headers={
+                "Access-Control-Allow-Origin": settings.FRONTEND_URL,
+                "Access-Control-Allow-Credentials": "true",
+                "Retry-After": "60",
+            },
+        )
+
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
     application.add_middleware(SlowAPIMiddleware)
 
     # ---- CORS ----------------------------------------------------------------

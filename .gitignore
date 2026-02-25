@@ -85,6 +85,10 @@ logs/
 *.seed
 *.pid.lock
 
+# ─── Celery ───────────────────────────────────────────────────────────────────
+celerybeat-schedule
+celerybeat.pid
+
 # ─── IDE / OS ─────────────────────────────────────────────────────────────────
 .vscode/settings.json
 .idea/
