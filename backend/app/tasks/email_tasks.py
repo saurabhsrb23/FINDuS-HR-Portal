@@ -143,3 +143,65 @@ def send_password_reset_email(
         html_body=_reset_html(reset_url),
     )
     log.info("password_reset_email_sent", email=email)
+
+
+def _job_alert_html(alert_title: str, jobs: list[dict]) -> str:
+    job_rows = "".join(
+        f"""<tr>
+          <td style="padding:12px;border-bottom:1px solid #e2e8f0;">
+            <strong style="color:#1e293b;">{j['title']}</strong><br>
+            <span style="color:#64748b;font-size:13px;">{j['company']} · {j['location']}</span>
+          </td>
+        </tr>"""
+        for j in jobs
+    )
+    return f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Job Alert: {alert_title}</title></head>
+<body style="font-family:sans-serif;background:#f8fafc;padding:40px 0;margin:0;">
+  <div style="max-width:600px;margin:auto;background:#ffffff;border-radius:8px;
+              padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+    <h1 style="color:#2563EB;font-size:22px;margin-bottom:4px;">Job Alert: {alert_title}</h1>
+    <p style="color:#64748b;font-size:14px;margin-top:0;">{len(jobs)} new matching job(s) found today</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;">
+      {job_rows}
+    </table>
+    <div style="text-align:center;margin:28px 0 0;">
+      <a href="{{}}/jobs/search"
+         style="background:#2563EB;color:#fff;text-decoration:none;padding:12px 28px;
+                border-radius:6px;font-size:14px;font-weight:600;display:inline-block;">
+        Browse All Jobs
+      </a>
+    </div>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+    <p style="color:#94a3b8;font-size:12px;text-align:center;">© DoneHR · AI-Powered HR Portal</p>
+  </div>
+</body>
+</html>
+"""
+
+
+@celery_app.task(
+    name="email.send_job_alert",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=60,
+)
+def send_job_alert_email(
+    self,  # noqa: ANN001
+    email: str,
+    alert_title: str,
+    jobs: list[dict],
+) -> None:
+    """Send a job alert digest email."""
+    log.info("sending_job_alert_email", email=email, alert=alert_title, count=len(jobs))
+    try:
+        _send_smtp(
+            to_email=email,
+            subject=f"Job Alert: {alert_title} — {len(jobs)} new match(es)",
+            html_body=_job_alert_html(alert_title, jobs),
+        )
+        log.info("job_alert_email_sent", email=email)
+    except Exception as exc:
+        log.warning("job_alert_email_skipped", email=email, error=str(exc))

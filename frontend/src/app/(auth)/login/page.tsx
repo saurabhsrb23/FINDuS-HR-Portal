@@ -44,6 +44,11 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
 
+  const HR_ROLE_SET = new Set([
+    "hr", "hr_admin", "hiring_manager", "recruiter",
+    "superadmin", "admin", "elite_admin",
+  ]);
+
   const onSubmit = async (values: LoginFormValues) => {
     setIsLoading(true);
     setServerError(null);
@@ -54,16 +59,31 @@ export default function LoginPage() {
         password: values.password,
       });
 
+      const role = data.role as UserRole;
+      const isHrRole = HR_ROLE_SET.has(role);
+
+      // Enforce tab ↔ role match
+      if (activeTab === "candidate" && isHrRole) {
+        setServerError("This is an HR/Recruiter account. Please switch to the HR / Recruiter tab.");
+        setIsLoading(false);
+        return;
+      }
+      if (activeTab === "hr" && !isHrRole) {
+        setServerError("This is a Candidate account. Please switch to the Candidate tab.");
+        setIsLoading(false);
+        return;
+      }
+
       await setToken({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
-        role: data.role as UserRole,
+        role,
         user_id: data.user_id,
         email: values.email,
       });
 
       toast.success("Logged in successfully!");
-      redirectByRole(data.role as UserRole, router);
+      redirectByRole(role, router);
     } catch (err: unknown) {
       const status = (err as { response?: { status: number; data?: { detail?: string } } })
         ?.response?.status;

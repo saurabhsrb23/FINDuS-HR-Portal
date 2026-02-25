@@ -1,24 +1,24 @@
 /**
- * Next.js edge middleware — route-level auth guard.
+ * Next.js edge middleware — route-level auth + role guard.
  *
- * Rules:
- *  /dashboard/candidate/* → requires access_token cookie with role=candidate
- *  /dashboard/recruiter/* → requires access_token cookie with role in HR_ROLES
- *  /admin/*               → requires admin_token cookie with aud="admin_portal"
- *
- * Uses the `jose` package (edge-runtime safe) to verify JWTs without making
- * a network request. Both frontend and backend share the same SECRET_KEY.
+ * /dashboard/jobs/*           → HR roles only  (hr, hr_admin, hiring_manager, recruiter)
+ * /dashboard/analytics        → HR roles only
+ * /dashboard/profile          → candidate only
+ * /dashboard/browse-jobs      → candidate only
+ * /dashboard/my-applications  → candidate only
+ * /dashboard/job-alerts       → candidate only
+ * /dashboard/*                → any authenticated user
+ * /admin/*                    → admin roles only (admin, superadmin, elite_admin)
  */
 
-import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify, JWTPayload } from "jose";
+import { NextRequest, NextResponse } from "next/server";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+type JWTPayloadWithRole = JWTPayload & { role?: string };
+
 function enc(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
-
-type JWTPayloadWithRole = JWTPayload & { role?: string };
 
 async function verifyToken(
   token: string,
@@ -36,73 +36,77 @@ async function verifyToken(
   }
 }
 
-function loginRedirect(request: NextRequest, params?: string): NextResponse {
+function redirectTo(request: NextRequest, pathname: string): NextResponse {
   const url = request.nextUrl.clone();
-  url.pathname = "/login";
-  if (params) url.searchParams.set("redirect", params);
+  url.pathname = pathname;
+  url.search = "";
   return NextResponse.redirect(url);
 }
 
-// ─── Role sets ────────────────────────────────────────────────────────────────
 const HR_ROLES = new Set([
   "hr",
   "hr_admin",
   "hiring_manager",
   "recruiter",
+  "superadmin",
+  "elite_admin",
 ]);
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "elite_admin"]);
 
-// ─── Middleware ────────────────────────────────────────────────────────────────
+// Routes only HR / admin roles can access
+const HR_ONLY_PREFIXES = [
+  "/dashboard/jobs",
+  "/dashboard/analytics",
+];
+
+// Routes only candidates can access
+const CANDIDATE_ONLY_PREFIXES = [
+  "/dashboard/profile",
+  "/dashboard/browse-jobs",
+  "/dashboard/my-applications",
+  "/dashboard/job-alerts",
+];
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
-
   const SECRET_KEY = process.env.SECRET_KEY ?? "";
   const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET ?? "";
 
-  // ── /admin/* ────────────────────────────────────────────────────────────────
+  // ── /admin/* ─────────────────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
-    const adminToken = request.cookies.get("admin_token")?.value;
-    if (!adminToken) return loginRedirect(request, pathname);
-
-    const payload = await verifyToken(adminToken, ADMIN_JWT_SECRET, {
+    const token = request.cookies.get("admin_token")?.value;
+    if (!token) return redirectTo(request, "/login");
+    const payload = await verifyToken(token, ADMIN_JWT_SECRET, {
       audience: "admin_portal",
     });
-    if (!payload || !ADMIN_ROLES.has(payload.role ?? "")) {
-      return loginRedirect(request, pathname);
-    }
+    if (!payload || !ADMIN_ROLES.has(payload.role ?? ""))
+      return redirectTo(request, "/login");
     return NextResponse.next();
   }
 
-  // ── /dashboard/candidate/* ──────────────────────────────────────────────────
-  if (pathname.startsWith("/dashboard/candidate")) {
-    const accessToken = request.cookies.get("access_token")?.value;
-    if (!accessToken) return loginRedirect(request, pathname);
+  // ── /dashboard/* ─────────────────────────────────────────────────────────
+  if (pathname.startsWith("/dashboard")) {
+    const token = request.cookies.get("access_token")?.value;
+    if (!token) return redirectTo(request, "/login");
 
-    const payload = await verifyToken(accessToken, SECRET_KEY);
-    if (!payload) return loginRedirect(request, pathname);
+    const payload = await verifyToken(token, SECRET_KEY);
+    if (!payload) return redirectTo(request, "/login");
 
-    if (payload.role !== "candidate") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/unauthorized";
-      return NextResponse.redirect(url);
+    const role = payload.role ?? "";
+
+    // HR-only sub-paths → redirect candidates to their dashboard
+    const isHrOnly = HR_ONLY_PREFIXES.some((p) => pathname.startsWith(p));
+    if (isHrOnly && !HR_ROLES.has(role)) {
+      return redirectTo(request, "/dashboard");
     }
-    return NextResponse.next();
-  }
 
-  // ── /dashboard/recruiter/* ──────────────────────────────────────────────────
-  if (pathname.startsWith("/dashboard/recruiter")) {
-    const accessToken = request.cookies.get("access_token")?.value;
-    if (!accessToken) return loginRedirect(request, pathname);
-
-    const payload = await verifyToken(accessToken, SECRET_KEY);
-    if (!payload) return loginRedirect(request, pathname);
-
-    if (!HR_ROLES.has(payload.role ?? "")) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/unauthorized";
-      return NextResponse.redirect(url);
+    // Candidate-only sub-paths → redirect HR to their jobs page
+    const isCandidateOnly = CANDIDATE_ONLY_PREFIXES.some((p) => pathname.startsWith(p));
+    if (isCandidateOnly && HR_ROLES.has(role)) {
+      return redirectTo(request, "/dashboard/jobs");
     }
+
     return NextResponse.next();
   }
 
@@ -110,8 +114,5 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/admin/:path*",
-  ],
+  matcher: ["/dashboard/:path*", "/admin/:path*"],
 };

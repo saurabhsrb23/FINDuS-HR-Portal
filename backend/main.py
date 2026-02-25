@@ -108,10 +108,28 @@ def create_app() -> FastAPI:
     # ─── OpenTelemetry ────────────────────────────────────────────────────────
     _setup_otel(application)
 
+    # ─── Ensure all models are registered in Base.metadata so FK references
+    #     resolve correctly (e.g. jobs.company_id → companies.id)
+    import app.models.audit_log    # noqa: F401
+    import app.models.company      # noqa: F401
+    import app.models.job          # noqa: F401
+    import app.models.user         # noqa: F401
+    import app.models.candidate    # noqa: F401
+    import app.models.application  # noqa: F401
+
     # ─── Routers ──────────────────────────────────────────────────────────────
     from app.routers.auth import router as auth_router
+    from app.routers.jobs import analytics_router, router as jobs_router
+    from app.routers.candidates import router as candidates_router
+    from app.routers.applications import router as applications_router
 
     application.include_router(auth_router)
+    # applications_router must be before jobs_router so /jobs/search (static)
+    # is matched before /jobs/{job_id} (dynamic) in Starlette's route matching.
+    application.include_router(applications_router)
+    application.include_router(jobs_router)
+    application.include_router(analytics_router)
+    application.include_router(candidates_router)
 
     # ─── Health check ─────────────────────────────────────────────────────────
     @application.get(

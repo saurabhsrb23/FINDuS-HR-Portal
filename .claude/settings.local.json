@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose build backend)",
+      "Bash(docker compose up -d backend)",
+      "Bash(docker compose build frontend)"
+    ]
+  }
+}

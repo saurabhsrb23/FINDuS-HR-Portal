@@ -16,7 +16,12 @@ try:
     # for Alembic autogenerate to detect them.
     from app.models.audit_log import AuditLog  # noqa: F401
     from app.models.company import Company  # noqa: F401
+    from app.models.job import Job, JobQuestion, JobSkill, PipelineStage  # noqa: F401
     from app.models.user import User  # noqa: F401
+    from app.models.candidate import (  # noqa: F401
+        CandidateProfile, WorkExperience, Education, Certification, Project, CandidateSkill
+    )
+    from app.models.application import Application, ApplicationAnswer, JobAlert  # noqa: F401
 
     target_metadata = Base.metadata
 except ImportError:
