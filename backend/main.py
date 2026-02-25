@@ -119,6 +119,7 @@ def create_app() -> FastAPI:
     import app.models.candidate    # noqa: F401
     import app.models.application  # noqa: F401
     import app.models.ai_summary   # noqa: F401
+    import app.models.saved_search  # noqa: F401
 
     # ─── Routers ──────────────────────────────────────────────────────────────
     from app.routers.auth import router as auth_router
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     from app.routers.candidates import router as candidates_router
     from app.routers.applications import router as applications_router
     from app.routers.ai import router as ai_router
+    from app.routers.search import router as search_router
 
     application.include_router(auth_router)
     # applications_router must be before jobs_router so /jobs/search (static)
@@ -135,6 +137,7 @@ def create_app() -> FastAPI:
     application.include_router(analytics_router)
     application.include_router(candidates_router)
     application.include_router(ai_router)
+    application.include_router(search_router)
 
     # ─── Global exception handler — ensures CORS headers on every 500 ─────────
     @application.exception_handler(Exception)

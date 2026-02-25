@@ -25,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "⊞" },
   // HR nav
   { label: "Job Postings", href: "/dashboard/jobs", icon: "💼", roles: HR_ROLES },
+  { label: "Find Candidates", href: "/dashboard/search", icon: "🔎", roles: HR_ROLES },
   { label: "Analytics", href: "/dashboard/analytics", icon: "📊", roles: HR_ROLES },
   // Candidate nav
   { label: "My Profile", href: "/dashboard/profile", icon: "👤", roles: CANDIDATE_ROLES },

@@ -3,6 +3,7 @@
  *
  * /dashboard/jobs/*           → HR roles only  (hr, hr_admin, hiring_manager, recruiter)
  * /dashboard/analytics        → HR roles only
+ * /dashboard/search           → HR roles only
  * /dashboard/profile          → candidate only
  * /dashboard/browse-jobs      → candidate only
  * /dashboard/my-applications  → candidate only
@@ -58,6 +59,7 @@ const ADMIN_ROLES = new Set(["admin", "superadmin", "elite_admin"]);
 const HR_ONLY_PREFIXES = [
   "/dashboard/jobs",
   "/dashboard/analytics",
+  "/dashboard/search",
 ];
 
 // Routes only candidates can access

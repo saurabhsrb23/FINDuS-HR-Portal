@@ -23,6 +23,7 @@ try:
     )
     from app.models.application import Application, ApplicationAnswer, JobAlert  # noqa: F401
     from app.models.ai_summary import AISummary  # noqa: F401
+    from app.models.saved_search import SavedSearch, TalentPool, TalentPoolCandidate, SearchAnalytic  # noqa: F401
 
     target_metadata = Base.metadata
 except ImportError:

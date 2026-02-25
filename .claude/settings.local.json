@@ -3,7 +3,9 @@
     "allow": [
       "Bash(docker compose build backend)",
       "Bash(docker compose up -d backend)",
-      "Bash(docker compose build frontend)"
+      "Bash(docker compose build frontend)",
+      "Bash(set +H)",
+      "Bash(py:*)"
     ]
   }
 }
