@@ -16,13 +16,35 @@ echo "==> [start.sh] Running database migrations..."
 alembic upgrade head
 echo "==> [start.sh] Migrations complete."
 
-# ─── Seed database (only if users table is empty) ─────────────────────────────
-# Strip +asyncpg driver prefix so psql gets a plain postgresql:// URL
+# ─── Seed database (idempotent — safe to run every startup) ───────────────────
+# seed.py uses ON CONFLICT DO NOTHING / fixed UUIDs so it won't duplicate data.
+# We check the users table first for a fast skip on already-seeded DBs.
+echo "==> [start.sh] Checking if seed is needed..."
+
+# Use psql (available via postgresql-client in Dockerfile) to count users
 PSQL_URL="${DATABASE_URL/+asyncpg/}"
-USER_COUNT=$(psql "${PSQL_URL}" -tAc "SELECT COUNT(*) FROM users;" 2>/dev/null || echo "0")
-if [ "$USER_COUNT" = "0" ]; then
-  echo "==> [start.sh] Seeding database..."
-  python seed.py && echo "==> [start.sh] Seed complete." || echo "==> [start.sh] Seed skipped (seed.py not found or failed)."
+USER_COUNT=$(psql "${PSQL_URL}" -tAc "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d '[:space:]' || echo "0")
+USER_COUNT="${USER_COUNT:-0}"
+
+if [ "${USER_COUNT}" = "0" ]; then
+  echo "==> [start.sh] No users found — running seed..."
+  # Temporarily disable set -e so a seed failure doesn't kill the container
+  set +e
+  python seed.py
+  SEED_EXIT=$?
+  set -e
+
+  if [ ${SEED_EXIT} -eq 0 ]; then
+    echo "==> [start.sh] Seed complete — all demo data loaded."
+  else
+    echo ""
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo "!! WARNING: seed.py exited with code ${SEED_EXIT}              !!"
+    echo "!! The app will still start but demo users will be missing.    !!"
+    echo "!! Re-run with: docker compose exec backend python seed.py     !!"
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo ""
+  fi
 else
   echo "==> [start.sh] Database already seeded (${USER_COUNT} users found). Skipping."
 fi

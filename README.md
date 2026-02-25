@@ -40,32 +40,42 @@ cp .env.example .env
 >
 > Everything else works out-of-the-box for local development.
 
-### 2. Build & run
+### 2. Build & run (recommended: use `make fresh`)
 
+**With make (easiest):**
 ```bash
+make fresh
+```
+This wipes any old state, builds images, starts all services, and follows the backend log so you can watch migrations + seed happen in real time.
+
+**Without make:**
+```bash
+# Stop any previously running instance first (frees ports 3000, 8001)
+docker compose down -v
+
+# Build and start everything
 docker compose up --build -d
+
+# Watch the backend until you see "Seed complete"
+docker compose logs -f backend
 ```
 
-> **The terminal returns to the prompt immediately — this is normal.** The `-d` flag runs everything in the background. Migrations and seed data run automatically inside the backend container. Watch progress with:
-> ```bash
-> docker compose logs -f backend
-> ```
-> Wait until you see `==> [start.sh] Seed complete.` before opening the browser. This takes ~30–60 seconds on first run.
+> **The terminal returns to the prompt immediately — this is normal.** The `-d` flag runs in the background. Seed data loads automatically. Watch with `docker compose logs -f backend` and wait for `==> [start.sh] Seed complete.` before opening the browser. First run takes ~30–60 seconds.
 
 Services spin up automatically: `postgres` → `redis` → `backend` (migrate + seed) → `frontend`
 
 ### 3. Verify seed completed
 
 ```bash
-docker compose logs backend | grep -E "Seed|seed|migration|Migrat"
+docker compose logs backend | grep -E "Seed|seed|Migrat"
 ```
 
 Expected output:
 ```
 ==> [start.sh] Running database migrations...
 ==> [start.sh] Migrations complete.
-==> [start.sh] Seeding database...
-==> [start.sh] Seed complete.
+==> [start.sh] No users found — running seed...
+==> [start.sh] Seed complete — all demo data loaded.
 ```
 
 ### 4. Open the app
@@ -496,32 +506,92 @@ Interactive Swagger: **http://localhost:8001/docs**
 
 ---
 
+## Troubleshooting
+
+### "Login failed. Please try again."
+
+This almost always means seed data didn't load. Work through this checklist in order:
+
+**Step 1 — Check backend logs:**
+```bash
+docker compose logs backend | grep -E "Seed|seed|ERROR|WARNING|error"
+```
+Look for `Seed complete` (good) or `seed.py exited with code` (bad — error is printed just above that line).
+
+**Step 2 — Check all containers started:**
+```bash
+docker compose ps
+```
+Every service should show `running`. If `backend` is `exited`, it crashed — check `docker compose logs backend` for the full error.
+
+**Step 3 — Port conflict (most common cause)**
+Only one Docker Compose project can use ports 3000 and 8001 at a time. If you have another clone or project running:
+```bash
+# In the OTHER project directory, stop it first:
+docker compose down
+
+# Then in this directory, do a full fresh start:
+make fresh          # with make
+# OR
+docker compose down -v && docker compose up --build -d && docker compose logs -f backend
+```
+
+**Step 4 — Force re-seed (if containers are running but users missing):**
+```bash
+make seed
+# OR
+docker compose exec backend python seed.py
+```
+
+**Step 5 — Nuclear option (wipe everything and start clean):**
+```bash
+make reset && make fresh
+# OR
+docker compose down -v --remove-orphans
+docker compose up --build -d
+docker compose logs -f backend
+```
+
+---
+
 ## Development Workflow
 
 ```bash
+# Fresh start (wipe + rebuild + follow logs)
+make fresh
+
+# Start in background (keeps existing data)
+make up
+
+# Stop (keeps data)
+make down
+
+# Wipe all data and stop
+make reset
+
+# Follow backend logs
+make logs
+
+# Re-run seed manually (idempotent — safe anytime)
+make seed
+
+# Run backend tests
+make test
+
+# Open backend shell
+make shell
+
 # Rebuild after code changes
 docker compose up --build -d
 
-# Run migrations
+# Run migrations only
 docker compose exec backend alembic upgrade head
 
-# Seed all data
-docker compose exec backend python seed.py
-
-# Backend unit tests with coverage
-docker compose exec backend pytest tests/ -v --cov=app
-
-# Generate a new migration
+# Generate a new Alembic migration
 docker compose exec backend alembic revision --autogenerate -m "description"
 
-# Tail backend logs
-docker compose logs -f backend
-
-# Tail celery worker logs
-docker compose logs -f worker
-
-# Flush Redis cache (useful during development)
-docker exec donehr_redis redis-cli FLUSHDB
+# Flush Redis cache
+docker compose exec redis redis-cli FLUSHDB
 ```
 
 ---
