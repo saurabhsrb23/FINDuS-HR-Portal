@@ -33,27 +33,42 @@ cp .env.example .env
 # Edit .env — set SECRET_KEY, ADMIN_JWT_SECRET, GROQ_API_KEY
 ```
 
+> **Minimum required changes in `.env`:**
+> - `SECRET_KEY` — any random string (32+ chars)
+> - `ADMIN_JWT_SECRET` — a different random string (32+ chars)
+> - `GROQ_API_KEY` — get free at https://console.groq.com
+>
+> Everything else works out-of-the-box for local development.
+
 ### 2. Build & run
 
 ```bash
 docker compose up --build -d
 ```
 
-Services spin up in dependency order: `postgres` → `redis` → `backend` → `frontend`
+> **The terminal returns to the prompt immediately — this is normal.** The `-d` flag runs everything in the background. Migrations and seed data run automatically inside the backend container. Watch progress with:
+> ```bash
+> docker compose logs -f backend
+> ```
+> Wait until you see `==> [start.sh] Seed complete.` before opening the browser. This takes ~30–60 seconds on first run.
 
-### 3. Apply migrations
+Services spin up automatically: `postgres` → `redis` → `backend` (migrate + seed) → `frontend`
+
+### 3. Verify seed completed
 
 ```bash
-docker compose exec backend alembic upgrade head
+docker compose logs backend | grep -E "Seed|seed|migration|Migrat"
 ```
 
-### 4. Seed test data
-
-```bash
-docker compose exec backend python seed.py
+Expected output:
+```
+==> [start.sh] Running database migrations...
+==> [start.sh] Migrations complete.
+==> [start.sh] Seeding database...
+==> [start.sh] Seed complete.
 ```
 
-### 5. Verify
+### 4. Open the app
 
 | URL | Expected |
 |-----|---------|

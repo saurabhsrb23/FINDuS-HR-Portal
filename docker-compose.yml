@@ -9,7 +9,6 @@ volumes:
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: donehr_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: donehr
@@ -30,7 +29,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: donehr_redis
     restart: unless-stopped
     ports:
       - "6380:6379"
@@ -46,7 +44,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: donehr_backend
     restart: unless-stopped
     ports:
       - "8001:8000"
@@ -68,9 +65,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
-    container_name: donehr_frontend
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8001}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -83,7 +79,6 @@ services:
 
   sonarqube:
     image: sonarqube:community
-    container_name: donehr_sonarqube
     restart: unless-stopped
     ports:
       - "9000:9000"
