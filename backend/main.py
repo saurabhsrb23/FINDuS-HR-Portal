@@ -72,12 +72,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _ws_sub_task = _asyncio.create_task(ws_manager.start_redis_subscriber())
     log.info("ws_redis_subscriber_started")
 
+    # Chat WebSocket Redis subscriber (Module 9)
+    from app.core.chat_manager import chat_manager
+    _chat_sub_task = _asyncio.create_task(chat_manager.start_chat_subscriber())
+    log.info("chat_redis_subscriber_started")
+
     yield
 
     # Shutdown
     _ws_sub_task.cancel()
+    _chat_sub_task.cancel()
     try:
         await _ws_sub_task
+    except _asyncio.CancelledError:
+        pass
+    try:
+        await _chat_sub_task
     except _asyncio.CancelledError:
         pass
 
@@ -134,6 +144,7 @@ def create_app() -> FastAPI:
     import app.models.ai_summary   # noqa: F401
     import app.models.saved_search  # noqa: F401
     import app.models.admin        # noqa: F401
+    import app.models.chat         # noqa: F401
 
     # ---- Routers -------------------------------------------------------------
     from app.routers.auth import router as auth_router
@@ -144,6 +155,7 @@ def create_app() -> FastAPI:
     from app.routers.search import router as search_router
     from app.routers.ws import router as ws_router
     from app.routers.admin import router as admin_router
+    from app.routers.chat import admin_chat_router, router as chat_router
 
     application.include_router(auth_router)
     # applications_router must be before jobs_router so /jobs/search (static)
@@ -156,6 +168,8 @@ def create_app() -> FastAPI:
     application.include_router(search_router)
     application.include_router(ws_router)
     application.include_router(admin_router)
+    application.include_router(chat_router)
+    application.include_router(admin_chat_router)
 
     # ---- Global exception handler --- ensures CORS headers on every 500 ------
     @application.exception_handler(Exception)

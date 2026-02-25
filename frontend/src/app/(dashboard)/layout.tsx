@@ -8,6 +8,7 @@ import { authAPI } from "@/lib/api";
 import { clearToken, getSessionUser, type UserRole } from "@/lib/auth";
 import ChatbotWidget from "@/components/ai/ChatbotWidget";
 import { useRealtimeEvents, RealtimeContext } from "@/hooks/useRealtimeEvents";
+import { chatAPI } from "@/lib/chatAPI";
 
 interface NavItem {
   label: string;
@@ -34,6 +35,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: "My Applications", href: "/dashboard/my-applications", icon: "📄", roles: CANDIDATE_ROLES },
   { label: "Job Alerts", href: "/dashboard/job-alerts", icon: "🔔", roles: CANDIDATE_ROLES },
   { label: "Resume Optimizer", href: "/dashboard/resume-optimizer", icon: "✨", roles: CANDIDATE_ROLES },
+  // Shared — all roles
+  { label: "Messages", href: "/dashboard/messages", icon: "💬" },
 ];
 
 export default function DashboardLayout({
@@ -45,6 +48,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [chatUnread, setChatUnread] = useState(0);
 
   const realtime = useRealtimeEvents();
 
@@ -63,6 +67,8 @@ export default function DashboardLayout({
         clearToken();
         router.replace("/login");
       });
+    // Load initial unread chat count
+    chatAPI.getUnreadCount().then(setChatUnread).catch(() => {});
   }, [router]);
 
   async function handleLogout() {
@@ -109,7 +115,12 @@ export default function DashboardLayout({
                 }`}
               >
                 <span>{item.icon}</span>
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/dashboard/messages" && chatUnread > 0 && (
+                  <span className="min-w-[1.25rem] h-5 px-1 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                    {chatUnread > 99 ? "99+" : chatUnread}
+                  </span>
+                )}
               </Link>
             );
           })}

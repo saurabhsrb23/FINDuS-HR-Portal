@@ -1,4 +1,4 @@
-# FindUs — AI-Powered HR Portal
+# FindUs (doneHr) — AI-Powered HR Portal
 
 > Full-stack recruiting platform — FastAPI · Next.js 14 · PostgreSQL 15 · Redis 7 · Groq AI · Docker
 
@@ -17,8 +17,8 @@
 ### 1. Clone & configure
 
 ```bash
-git clone <repo-url> findus
-cd findus
+git clone https://github.com/saurabhsrb23/FINDuS-HR-Portal.git
+cd FINDuS-HR-Portal
 
 # Copy the example env and fill in your secrets
 cp .env.example .env
