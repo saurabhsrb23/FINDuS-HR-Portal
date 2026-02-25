@@ -52,10 +52,10 @@ class Settings(BaseSettings):
         default=7, gt=0, description="Refresh token TTL in days."
     )
 
-    # ─── AI ───────────────────────────────────────────────────────────────────
-    OPENAI_API_KEY: SecretStr = Field(
-        ...,
-        description="OpenAI API key (sk-...).",
+    # ─── AI (Groq) ────────────────────────────────────────────────────────────
+    GROQ_API_KEY: SecretStr | None = Field(
+        default=None,
+        description="Groq API key (gsk-...). Required for AI features.",
     )
 
     # ─── Email / SMTP ─────────────────────────────────────────────────────────

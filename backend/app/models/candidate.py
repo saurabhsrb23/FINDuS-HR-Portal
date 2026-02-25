@@ -38,8 +38,8 @@ class CandidateProfile(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     avatar_url: Mapped[str | None] = mapped_column(String(500))
 
-    # Resume
-    resume_url: Mapped[str | None] = mapped_column(String(500))
+    # Resume — stored as base64 data URL (can be several hundred KB)
+    resume_url: Mapped[str | None] = mapped_column(Text)
     resume_filename: Mapped[str | None] = mapped_column(String(255))
     resume_parsed_data: Mapped[dict | None] = mapped_column(JSONB)
 

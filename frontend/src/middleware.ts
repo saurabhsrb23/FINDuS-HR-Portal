@@ -66,6 +66,7 @@ const CANDIDATE_ONLY_PREFIXES = [
   "/dashboard/browse-jobs",
   "/dashboard/my-applications",
   "/dashboard/job-alerts",
+  "/dashboard/resume-optimizer",
 ];
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {

@@ -12,6 +12,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+_log = structlog.get_logger("findus.errors")
+
 from app.core.config import settings
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.rate_limiter import limiter
@@ -116,12 +118,14 @@ def create_app() -> FastAPI:
     import app.models.user         # noqa: F401
     import app.models.candidate    # noqa: F401
     import app.models.application  # noqa: F401
+    import app.models.ai_summary   # noqa: F401
 
     # ─── Routers ──────────────────────────────────────────────────────────────
     from app.routers.auth import router as auth_router
     from app.routers.jobs import analytics_router, router as jobs_router
     from app.routers.candidates import router as candidates_router
     from app.routers.applications import router as applications_router
+    from app.routers.ai import router as ai_router
 
     application.include_router(auth_router)
     # applications_router must be before jobs_router so /jobs/search (static)
@@ -130,6 +134,21 @@ def create_app() -> FastAPI:
     application.include_router(jobs_router)
     application.include_router(analytics_router)
     application.include_router(candidates_router)
+    application.include_router(ai_router)
+
+    # ─── Global exception handler — ensures CORS headers on every 500 ─────────
+    @application.exception_handler(Exception)
+    async def _unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+        _log.error(
+            "unhandled_exception",
+            path=request.url.path,
+            method=request.method,
+            error=repr(exc),
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error. Please try again."},
+        )
 
     # ─── Health check ─────────────────────────────────────────────────────────
     @application.get(

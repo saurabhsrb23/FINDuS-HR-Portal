@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { authAPI } from "@/lib/api";
 import { clearToken, getSessionUser, type UserRole } from "@/lib/auth";
+import ChatbotWidget from "@/components/ai/ChatbotWidget";
 
 interface NavItem {
   label: string;
@@ -30,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Browse Jobs", href: "/dashboard/browse-jobs", icon: "🔍", roles: CANDIDATE_ROLES },
   { label: "My Applications", href: "/dashboard/my-applications", icon: "📄", roles: CANDIDATE_ROLES },
   { label: "Job Alerts", href: "/dashboard/job-alerts", icon: "🔔", roles: CANDIDATE_ROLES },
+  { label: "Resume Optimizer", href: "/dashboard/resume-optimizer", icon: "✨", roles: CANDIDATE_ROLES },
 ];
 
 export default function DashboardLayout({
@@ -123,6 +125,9 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">{children}</main>
+
+      {/* AI Chatbot — candidate only */}
+      {userRole === "candidate" && <ChatbotWidget />}
     </div>
   );
 }

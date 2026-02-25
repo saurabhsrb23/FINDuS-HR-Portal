@@ -10,7 +10,7 @@ celery_app = Celery(
     "donehr",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks.email_tasks", "app.tasks.job_tasks", "app.tasks.job_alert_tasks"],
+    include=["app.tasks.email_tasks", "app.tasks.job_tasks", "app.tasks.job_alert_tasks", "app.tasks.ai_tasks"],
 )
 
 celery_app.conf.update(
