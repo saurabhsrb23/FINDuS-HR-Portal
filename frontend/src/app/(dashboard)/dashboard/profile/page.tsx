@@ -94,6 +94,14 @@ export default function ProfilePage() {
   const [eduForm, setEduForm] = useState({
     institution: "", degree: "", field_of_study: "", start_year: "", end_year: "", grade: ""
   });
+  const [showCertForm, setShowCertForm] = useState(false);
+  const [certForm, setCertForm] = useState({
+    name: "", issuing_org: "", issue_date: "", expiry_date: "", credential_id: "", credential_url: ""
+  });
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [projectForm, setProjectForm] = useState({
+    title: "", description: "", tech_stack: "", project_url: "", repo_url: "", start_date: "", end_date: ""
+  });
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -226,6 +234,43 @@ export default function ProfilePage() {
   const deleteEdu = async (id: string) => {
     try { await candidateAPI.deleteEducation(id); toast.success("Removed"); load(); }
     catch { toast.error("Failed"); }
+  };
+
+  const addCert = async () => {
+    if (!certForm.name.trim()) return;
+    try {
+      await candidateAPI.addCertification({
+        name: certForm.name.trim(),
+        issuing_org: certForm.issuing_org || null,
+        issue_date: certForm.issue_date || null,
+        expiry_date: certForm.expiry_date || null,
+        credential_id: certForm.credential_id || null,
+        credential_url: certForm.credential_url || null,
+      });
+      toast.success("Certification added!");
+      setCertForm({ name: "", issuing_org: "", issue_date: "", expiry_date: "", credential_id: "", credential_url: "" });
+      setShowCertForm(false);
+      load();
+    } catch { toast.error("Failed to add certification"); }
+  };
+
+  const addProject = async () => {
+    if (!projectForm.title.trim()) return;
+    try {
+      await candidateAPI.addProject({
+        title: projectForm.title.trim(),
+        description: projectForm.description || null,
+        tech_stack: projectForm.tech_stack ? projectForm.tech_stack.split(",").map(s => s.trim()).filter(Boolean) : null,
+        project_url: projectForm.project_url || null,
+        repo_url: projectForm.repo_url || null,
+        start_date: projectForm.start_date || null,
+        end_date: projectForm.end_date || null,
+      });
+      toast.success("Project added!");
+      setProjectForm({ title: "", description: "", tech_stack: "", project_url: "", repo_url: "", start_date: "", end_date: "" });
+      setShowProjectForm(false);
+      load();
+    } catch { toast.error("Failed to add project"); }
   };
 
   if (loading) return (
@@ -508,14 +553,54 @@ export default function ProfilePage() {
       </Section>
 
       {/* Certifications */}
-      <Section title="Certifications" icon={<Award className="w-4 h-4 text-purple-500" />}>
-        {profile?.certifications.length === 0 && <p className="text-sm text-gray-400">No certifications added yet.</p>}
+      <Section title="Certifications" icon={<Award className="w-4 h-4 text-purple-500" />} onAdd={() => setShowCertForm(s => !s)}>
+        {showCertForm && (
+          <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500 block mb-1">Certificate Name *</label>
+                <input value={certForm.name} onChange={e => setCertForm(f => ({ ...f, name: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="e.g. AWS Certified Solutions Architect" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Issuing Organization</label>
+                <input value={certForm.issuing_org} onChange={e => setCertForm(f => ({ ...f, issuing_org: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="e.g. Amazon Web Services" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Credential ID</label>
+                <input value={certForm.credential_id} onChange={e => setCertForm(f => ({ ...f, credential_id: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Issue Date</label>
+                <input type="date" value={certForm.issue_date} onChange={e => setCertForm(f => ({ ...f, issue_date: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Expiry Date</label>
+                <input type="date" value={certForm.expiry_date} onChange={e => setCertForm(f => ({ ...f, expiry_date: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500 block mb-1">Credential URL</label>
+                <input value={certForm.credential_url} onChange={e => setCertForm(f => ({ ...f, credential_url: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="https://..." />
+              </div>
+            </div>
+            <button onClick={addCert} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">Save Certification</button>
+          </div>
+        )}
+        {profile?.certifications.length === 0 && !showCertForm && <p className="text-sm text-gray-400">No certifications added yet.</p>}
         <div className="space-y-2">
           {profile?.certifications.map(c => (
             <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div>
                 <p className="font-medium text-sm">{c.name}</p>
                 {c.issuing_org && <p className="text-gray-500 text-xs">{c.issuing_org}</p>}
+                {(c.issue_date || c.expiry_date) && (
+                  <p className="text-gray-400 text-xs mt-0.5">
+                    {c.issue_date ? new Date(c.issue_date).toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : ""}
+                    {c.expiry_date ? ` – ${new Date(c.expiry_date).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}` : ""}
+                  </p>
+                )}
+                {c.credential_url && (
+                  <a href={c.credential_url} target="_blank" rel="noreferrer" className="text-xs text-indigo-500 hover:underline">View credential</a>
+                )}
               </div>
               <button onClick={() => candidateAPI.deleteCertification(c.id).then(() => { toast.success("Removed"); load(); })} className="text-red-400 hover:text-red-600 p-1">
                 <Trash2 className="w-4 h-4" />
@@ -526,16 +611,60 @@ export default function ProfilePage() {
       </Section>
 
       {/* Projects */}
-      <Section title="Projects" icon={<FolderOpen className="w-4 h-4 text-orange-500" />}>
-        {profile?.projects.length === 0 && <p className="text-sm text-gray-400">No projects added yet.</p>}
+      <Section title="Projects" icon={<FolderOpen className="w-4 h-4 text-orange-500" />} onAdd={() => setShowProjectForm(s => !s)}>
+        {showProjectForm && (
+          <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500 block mb-1">Project Title *</label>
+                <input value={projectForm.title} onChange={e => setProjectForm(f => ({ ...f, title: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="e.g. E-Commerce Platform" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Tech Stack <span className="text-gray-400">(comma separated)</span></label>
+                <input value={projectForm.tech_stack} onChange={e => setProjectForm(f => ({ ...f, tech_stack: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="React, Node.js, PostgreSQL" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Project URL</label>
+                <input value={projectForm.project_url} onChange={e => setProjectForm(f => ({ ...f, project_url: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="https://..." />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Repository URL</label>
+                <input value={projectForm.repo_url} onChange={e => setProjectForm(f => ({ ...f, repo_url: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="https://github.com/..." />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Start Date</label>
+                <input type="date" value={projectForm.start_date} onChange={e => setProjectForm(f => ({ ...f, start_date: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">End Date</label>
+                <input type="date" value={projectForm.end_date} onChange={e => setProjectForm(f => ({ ...f, end_date: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500 block mb-1">Description</label>
+                <textarea rows={2} value={projectForm.description} onChange={e => setProjectForm(f => ({ ...f, description: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="What does this project do?" />
+              </div>
+            </div>
+            <button onClick={addProject} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">Save Project</button>
+          </div>
+        )}
+        {profile?.projects.length === 0 && !showProjectForm && <p className="text-sm text-gray-400">No projects added yet.</p>}
         <div className="space-y-2">
           {profile?.projects.map(p => (
             <div key={p.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">{p.title}</p>
-                {p.tech_stack && <div className="flex flex-wrap gap-1 mt-1">{p.tech_stack.map(t => <span key={t} className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{t}</span>)}</div>}
+                {p.description && <p className="text-gray-500 text-xs mt-0.5 line-clamp-2">{p.description}</p>}
+                {p.tech_stack && p.tech_stack.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {p.tech_stack.map(t => <span key={t} className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{t}</span>)}
+                  </div>
+                )}
+                <div className="flex gap-3 mt-1">
+                  {p.project_url && <a href={p.project_url} target="_blank" rel="noreferrer" className="text-xs text-indigo-500 hover:underline">Live</a>}
+                  {p.repo_url && <a href={p.repo_url} target="_blank" rel="noreferrer" className="text-xs text-indigo-500 hover:underline">Repo</a>}
+                </div>
               </div>
-              <button onClick={() => candidateAPI.deleteProject(p.id).then(() => { toast.success("Removed"); load(); })} className="text-red-400 hover:text-red-600 p-1">
+              <button onClick={() => candidateAPI.deleteProject(p.id).then(() => { toast.success("Removed"); load(); })} className="text-red-400 hover:text-red-600 p-1 ml-2 shrink-0">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
