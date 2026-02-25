@@ -10,6 +10,7 @@ from app.models.user import User, UserRole
 from app.schemas.application import (
     ApplicationListItem,
     ApplicationResponse,
+    ApplicationStatusUpdate,
     ApplyRequest,
     JobAlertCreate,
     JobAlertResponse,
@@ -21,6 +22,7 @@ from app.schemas.job import JobResponse
 router = APIRouter(tags=["Applications"])
 
 _CANDIDATE_ROLES = [UserRole.CANDIDATE]
+_HR_ROLES = [UserRole.HR, UserRole.HR_ADMIN, UserRole.HIRING_MANAGER, UserRole.RECRUITER, UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.ELITE_ADMIN]
 
 
 def _svc(db: AsyncSession = Depends(get_db)) -> ApplicationService:
@@ -182,3 +184,31 @@ async def delete_alert(
     svc: ApplicationService = Depends(_svc),
 ):
     await svc.delete_alert(current_user.id, alert_id)
+
+
+# ── HR: view applicants ────────────────────────────────────────────────────────
+
+@router.get(
+    "/jobs/{job_id}/applications",
+    summary="[HR] List all applicants for a job",
+)
+async def get_job_applications(
+    job_id: uuid.UUID,
+    current_user: User = Depends(require_role(*_HR_ROLES)),
+    svc: ApplicationService = Depends(_svc),
+):
+    return await svc.get_job_applications(job_id, current_user.id)
+
+
+@router.patch(
+    "/applications/{app_id}/status",
+    response_model=ApplicationResponse,
+    summary="[HR] Update application status",
+)
+async def update_application_status(
+    app_id: uuid.UUID,
+    data: ApplicationStatusUpdate,
+    current_user: User = Depends(require_role(*_HR_ROLES)),
+    svc: ApplicationService = Depends(_svc),
+):
+    return await svc.update_application_status(app_id, data.status, data.note)

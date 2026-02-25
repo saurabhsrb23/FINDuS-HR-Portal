@@ -152,15 +152,22 @@ export default function DashboardPage() {
 
           {/* Live KPI cards */}
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <Link
+              href="/dashboard/jobs"
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-indigo-300 transition-all group"
+            >
               <LiveCounterBadge
                 value={summary?.total_jobs ?? null}
                 label="Total Jobs"
                 icon="💼"
                 onUpdate={(v) => setSummary(prev => prev ? { ...prev, total_jobs: v } : prev)}
               />
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <p className="text-xs text-indigo-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">View jobs →</p>
+            </Link>
+            <Link
+              href="/dashboard/jobs?status=active"
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-green-300 transition-all group"
+            >
               <LiveCounterBadge
                 value={summary?.active_jobs ?? null}
                 label="Active Jobs"
@@ -169,8 +176,12 @@ export default function DashboardPage() {
                 eventTypes={["new_job_posted"]}
                 onUpdate={(v) => setSummary(prev => prev ? { ...prev, active_jobs: v } : prev)}
               />
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <p className="text-xs text-green-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">View active →</p>
+            </Link>
+            <Link
+              href="/dashboard/applications"
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-indigo-300 transition-all group"
+            >
               <LiveCounterBadge
                 value={summary?.total_applications ?? null}
                 label="Applications"
@@ -179,15 +190,20 @@ export default function DashboardPage() {
                 eventTypes={["new_application"]}
                 onUpdate={(v) => setSummary(prev => prev ? { ...prev, total_applications: v } : prev)}
               />
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <p className="text-xs text-indigo-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">View all →</p>
+            </Link>
+            <Link
+              href="/dashboard/analytics"
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md hover:border-purple-300 transition-all group"
+            >
               <LiveCounterBadge
                 value={summary?.total_views ?? null}
                 label="Job Views"
                 icon="👁️"
                 colorClass="text-purple-600"
               />
-            </div>
+              <p className="text-xs text-purple-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">View analytics →</p>
+            </Link>
           </div>
 
           {/* Two-column: quick links + live feed */}

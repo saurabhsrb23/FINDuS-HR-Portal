@@ -60,6 +60,31 @@ class ApplicationStatusUpdate(BaseModel):
     note: str | None = None
 
 
+class HRApplicationItem(BaseModel):
+    """Application as seen by HR — includes candidate details."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    job_id: uuid.UUID
+    candidate_id: uuid.UUID
+    status: ApplicationStatus
+    cover_letter: str | None
+    resume_url: str | None
+    hr_notes: str | None
+    rating: int | None
+    timeline: list | None
+    applied_at: datetime
+    updated_at: datetime
+    # Candidate info (populated by service)
+    candidate_name: str | None = None
+    candidate_email: str | None = None
+    candidate_headline: str | None = None
+    candidate_location: str | None = None
+    candidate_years_exp: int | None = None
+    candidate_skills: list[str] = []
+    answers: list[ApplicationAnswerResponse] = []
+
+
 class JobAlertCreate(BaseModel):
     title: str
     keywords: str | None = None

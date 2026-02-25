@@ -5,7 +5,7 @@ import uuid
 
 import structlog
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.application import Application, ApplicationStatus, JobAlert
@@ -148,6 +148,12 @@ class ApplicationService:
             data=data,
             resume_url=profile.resume_url,
         )
+        # Increment the cached applications counter on the job
+        await self._db.execute(
+            update(Job)
+            .where(Job.id == job_id)
+            .values(applications_count=Job.applications_count + 1)
+        )
         await self._db.commit()
         await self._db.refresh(application)
         log.info("application_submitted", user_id=str(user_id), job_id=str(job_id))
@@ -224,7 +230,104 @@ class ApplicationService:
             raise HTTPException(status_code=422, detail="Application already withdrawn.")
         if app.status in (ApplicationStatus.HIRED, ApplicationStatus.REJECTED):
             raise HTTPException(status_code=422, detail="Cannot withdraw a closed application.")
+        job_id = app.job_id
         app = await self._repo.withdraw(app)
+        # Decrement the cached applications counter on the job (floor at 0)
+        await self._db.execute(
+            update(Job)
+            .where(Job.id == job_id, Job.applications_count > 0)
+            .values(applications_count=Job.applications_count - 1)
+        )
+        await self._db.commit()
+        await self._db.refresh(app)
+        return app
+
+    # ── HR: view applicants for a job ─────────────────────────────────────────
+
+    async def get_job_applications(
+        self,
+        job_id: uuid.UUID,
+        hr_user_id: uuid.UUID,
+    ) -> list[dict]:
+        """Return all applications for a job, enriched with candidate info."""
+        from app.models.candidate import CandidateProfile, CandidateSkill
+        from app.models.user import User
+
+        # Verify job exists (HR can view any job's applicants)
+        result = await self._db.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found.")
+
+        applications = await self._repo.get_by_job(job_id)
+        if not applications:
+            return []
+
+        candidate_ids = [app.candidate_id for app in applications]
+
+        # Load candidate profiles
+        profiles_result = await self._db.execute(
+            select(CandidateProfile).where(CandidateProfile.id.in_(candidate_ids))
+        )
+        profiles = {p.id: p for p in profiles_result.scalars().all()}
+
+        # Load users (for email)
+        user_ids = [p.user_id for p in profiles.values()]
+        users_result = await self._db.execute(
+            select(User).where(User.id.in_(user_ids))
+        )
+        users = {u.id: u for u in users_result.scalars().all()}
+
+        # Load skills
+        skills_result = await self._db.execute(
+            select(CandidateSkill).where(CandidateSkill.candidate_id.in_(candidate_ids))
+        )
+        skills_by_candidate: dict[uuid.UUID, list[str]] = {}
+        for skill in skills_result.scalars().all():
+            skills_by_candidate.setdefault(skill.candidate_id, []).append(skill.skill_name)
+
+        items = []
+        for app in applications:
+            profile = profiles.get(app.candidate_id)
+            user = users.get(profile.user_id) if profile else None
+            items.append({
+                "id": str(app.id),
+                "job_id": str(app.job_id),
+                "candidate_id": str(app.candidate_id),
+                "status": app.status.value,
+                "cover_letter": app.cover_letter,
+                "resume_url": app.resume_url,
+                "hr_notes": app.hr_notes,
+                "rating": app.rating,
+                "timeline": app.timeline,
+                "applied_at": app.applied_at.isoformat(),
+                "updated_at": app.updated_at.isoformat(),
+                "candidate_name": profile.full_name if profile else None,
+                "candidate_email": user.email if user else None,
+                "candidate_headline": profile.headline if profile else None,
+                "candidate_location": profile.location if profile else None,
+                "candidate_years_exp": profile.years_of_experience if profile else None,
+                "candidate_skills": skills_by_candidate.get(app.candidate_id, []),
+                "answers": [
+                    {"id": str(a.id), "question_id": str(a.question_id), "answer_text": a.answer_text}
+                    for a in (app.answers or [])
+                ],
+            })
+        return items
+
+    async def update_application_status(
+        self,
+        app_id: uuid.UUID,
+        status: ApplicationStatus,
+        note: str | None,
+    ) -> Application:
+        """HR updates an application's status."""
+        app = await self._repo.get_by_id(app_id)
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found.")
+        if app.status == ApplicationStatus.WITHDRAWN:
+            raise HTTPException(status_code=422, detail="Cannot update a withdrawn application.")
+        app = await self._repo.update_status(app, status, note)
         await self._db.commit()
         await self._db.refresh(app)
         return app

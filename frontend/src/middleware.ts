@@ -60,6 +60,7 @@ const HR_ONLY_PREFIXES = [
   "/dashboard/jobs",
   "/dashboard/analytics",
   "/dashboard/search",
+  "/dashboard/applications",
 ];
 
 // Routes only candidates can access

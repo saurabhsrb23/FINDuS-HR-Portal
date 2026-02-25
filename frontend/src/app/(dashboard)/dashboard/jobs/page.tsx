@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { cloneJob, deleteJob, listJobs, pauseJob, publishJob } from "@/lib/jobsAPI";
 import type { JobListItem, JobStatus, JobType } from "@/types/job";
@@ -16,10 +17,19 @@ const STATUS_FILTERS: Array<{ label: string; value: JobStatus | "" }> = [
 ];
 
 export default function JobsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-400">Loading…</div>}>
+      <JobsPageInner />
+    </Suspense>
+  );
+}
+
+function JobsPageInner() {
+  const searchParams = useSearchParams();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<JobStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<JobStatus | "">((searchParams.get("status") as JobStatus) ?? "");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +236,13 @@ function JobRow({
       {/* Metrics */}
       <div className="hidden sm:flex items-center gap-5 text-sm text-gray-500 flex-shrink-0">
         <span title="Views">👁 {job.views_count}</span>
-        <span title="Applications">📋 {job.applications_count}</span>
+        <Link
+          href={`/dashboard/jobs/${job.id}/applicants`}
+          className="hover:text-indigo-600 transition-colors"
+          title="View applicants"
+        >
+          📋 {job.applications_count} applicant{job.applications_count !== 1 ? "s" : ""}
+        </Link>
       </div>
 
       {/* Actions */}
@@ -247,6 +263,12 @@ function JobRow({
             Pause
           </button>
         )}
+        <Link
+          href={`/dashboard/jobs/${job.id}/applicants`}
+          className="px-2.5 py-1 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium"
+        >
+          Applicants
+        </Link>
         <Link
           href={`/dashboard/jobs/${job.id}/pipeline`}
           className="px-2.5 py-1 text-xs bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 font-medium"
