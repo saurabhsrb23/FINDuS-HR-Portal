@@ -189,6 +189,27 @@ async def optimize_resume(
     return await ai_service.optimize_resume(db, current_user.id, force_refresh=refresh)
 
 
+# ── My Resume Summary (candidate — own profile) ───────────────────────────────
+
+@router.get(
+    "/my-resume-summary",
+    response_model=ResumeSummaryResponse,
+    summary="Get AI narrative summary of own resume (candidate only)",
+)
+async def my_resume_summary(
+    refresh: bool = Query(False),
+    current_user: User = Depends(require_role(*_CANDIDATE_ROLES)),
+    db: AsyncSession = Depends(_db),
+):
+    from app.repositories.candidate_repository import CandidateRepository
+    repo = CandidateRepository(db)
+    profile = await repo.get_by_user_id(current_user.id)
+    if not profile:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Candidate profile not found. Complete your profile first.")
+    return await ai_service.get_resume_summary(db, profile.id, force_refresh=refresh)
+
+
 # ── Career Chatbot (candidate) ────────────────────────────────────────────────
 
 @router.post(

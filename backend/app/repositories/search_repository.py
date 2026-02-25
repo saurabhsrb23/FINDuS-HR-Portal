@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -103,14 +104,42 @@ class CandidateSearchRepository:
         if filters.query:
             tsq = parse_boolean_search(filters.query)
             if tsq:
-                try:
-                    q = q.where(
-                        CandidateProfile.search_vector.op("@@")(
-                            func.to_tsquery("english", tsq)
+                # Extract individual terms (strip tsquery operators) for skill matching
+                terms = [
+                    w.strip()
+                    for w in re.split(r"[&|!()\s<>\*:]+", tsq)
+                    if w.strip() and len(w.strip()) >= 2
+                ]
+
+                conditions: list[Any] = []
+
+                # Condition 1: full-text search on headline/summary/role/location/name
+                conditions.append(
+                    CandidateProfile.search_vector.op("@@")(
+                        func.to_tsquery("english", tsq)
+                    )
+                )
+
+                # Condition 2: skill name match — catches candidates whose skills
+                # contain the query terms even if not in their text fields
+                if terms:
+                    conditions.append(
+                        CandidateProfile.id.in_(
+                            select(CandidateSkill.candidate_id).where(
+                                or_(
+                                    *[
+                                        CandidateSkill.skill_name.ilike(f"%{term}%")
+                                        for term in terms
+                                    ]
+                                )
+                            ).scalar_subquery()
                         )
                     )
+
+                try:
+                    q = q.where(or_(*conditions))
                 except Exception:
-                    pass  # invalid tsquery → skip clause silently
+                    pass  # malformed tsquery → skip filter
 
         # ── Skills filter ──────────────────────────────────────────────────
         if filters.skills:
@@ -267,8 +296,18 @@ class CandidateSearchRepository:
         profile: CandidateProfile,
         filters: SearchCandidateRequest,
     ) -> CandidateSearchItem:
-        # Skills with match highlighting
-        filter_skills_lower = {sf.skill.lower() for sf in filters.skills}
+        # Skills with match highlighting — includes both skills filter AND boolean query terms
+        filter_skills_lower: set[str] = {sf.skill.lower() for sf in filters.skills}
+        if filters.query:
+            tsq = parse_boolean_search(filters.query)
+            if tsq:
+                query_terms = {
+                    w.strip().lower()
+                    for w in re.split(r"[&|!()\s<>\*:]+", tsq)
+                    if w.strip() and len(w.strip()) >= 2
+                }
+                filter_skills_lower |= query_terms
+
         skill_results = [
             SkillResult(
                 skill_name=s.skill_name,

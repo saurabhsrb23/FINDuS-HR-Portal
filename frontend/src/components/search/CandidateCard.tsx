@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
+import { Download, Loader2 } from "lucide-react";
 import type { CandidateSearchItem } from "@/types/search";
+import { candidateAPI } from "@/lib/candidateAPI";
 
 interface Props {
   candidate: CandidateSearchItem;
@@ -27,6 +30,26 @@ function ProfileStrengthBar({ value }: { value: number }) {
 
 export default function CandidateCard({ candidate, selected, onToggleSelect }: Props) {
   const c = candidate;
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownloadResume() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const res = await candidateAPI.getCandidateResumeUrl(c.id);
+      const { resume_url, resume_filename } = res.data;
+      const link = document.createElement("a");
+      link.href = resume_url;
+      link.download = resume_filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      // no resume uploaded
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div
@@ -144,6 +167,27 @@ export default function CandidateCard({ candidate, selected, onToggleSelect }: P
         <div className="mt-2">
           <ProfileStrengthBar value={c.profile_strength} />
         </div>
+
+        {/* Resume download (HR) */}
+        {c.resume_filename && (
+          <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-xs text-gray-400 truncate max-w-[65%]">
+              📄 {c.resume_filename}
+            </span>
+            <button
+              onClick={handleDownloadResume}
+              disabled={downloading}
+              className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 px-2 py-1 rounded-md hover:bg-indigo-50 transition-colors disabled:opacity-50"
+            >
+              {downloading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Download className="w-3 h-3" />
+              )}
+              Download CV
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

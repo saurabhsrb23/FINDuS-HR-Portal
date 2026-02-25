@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import {
   Briefcase, GraduationCap, Award, FolderOpen, Zap,
-  Plus, Trash2, Upload, CheckCircle, ChevronDown, ChevronUp
+  Plus, Trash2, Upload, CheckCircle, ChevronDown, ChevronUp, Download
 } from "lucide-react";
 
 import { candidateAPI } from "@/lib/candidateAPI";
@@ -268,14 +268,26 @@ export default function ProfilePage() {
           <h3 className="font-semibold text-gray-800 flex items-center gap-2">
             <Upload className="w-4 h-4" /> Resume
           </h3>
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-          >
-            {uploading ? "Uploading…" : profile?.resume_filename ? "Replace PDF" : "Upload PDF"}
-          </button>
-          <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleResumeUpload} />
+          <div className="flex items-center gap-2">
+            {profile?.resume_url && (
+              <a
+                href={profile.resume_url}
+                download={profile.resume_filename || "resume.pdf"}
+                className="flex items-center gap-1.5 text-sm text-indigo-600 border border-indigo-200 px-3 py-2 rounded-lg hover:bg-indigo-50 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </a>
+            )}
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {uploading ? "Uploading…" : profile?.resume_filename ? "Replace PDF" : "Upload PDF"}
+            </button>
+            <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleResumeUpload} />
+          </div>
         </div>
         {profile?.resume_filename ? (
           <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">

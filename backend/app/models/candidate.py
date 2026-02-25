@@ -5,9 +5,9 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Computed, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -54,6 +54,21 @@ class CandidateProfile(Base):
 
     # Profile strength 0-100
     profile_strength: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Full-text search vector — GENERATED ALWAYS AS STORED, managed by PostgreSQL
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "setweight(to_tsvector('english', coalesce(headline, '')), 'A') || "
+            "setweight(to_tsvector('english', coalesce(summary, '')), 'B') || "
+            "setweight(to_tsvector('english', coalesce(desired_role, '')), 'C') || "
+            "setweight(to_tsvector('english', coalesce(location, '')), 'D') || "
+            "setweight(to_tsvector('english', coalesce(full_name, '')), 'D')",
+            persisted=True,
+        ),
+        nullable=True,
+        deferred=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

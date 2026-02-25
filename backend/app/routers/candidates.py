@@ -1,7 +1,8 @@
 """Candidate profile endpoints."""
 import uuid
 
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_role
@@ -26,6 +27,10 @@ from app.services.candidate_service import CandidateService
 router = APIRouter(prefix="/candidates", tags=["Candidates"])
 
 _CANDIDATE_ROLES = [UserRole.CANDIDATE]
+_HR_ROLES = [
+    UserRole.HR, UserRole.HR_ADMIN, UserRole.HIRING_MANAGER,
+    UserRole.RECRUITER, UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.ELITE_ADMIN,
+]
 
 
 def _svc(db: AsyncSession = Depends(get_db)) -> CandidateService:
@@ -227,3 +232,28 @@ async def delete_skill(
     svc: CandidateService = Depends(_svc),
 ):
     await svc.delete_skill(current_user.id, skill_id)
+
+
+# ── HR: Download candidate resume ─────────────────────────────────────────────
+
+@router.get(
+    "/{candidate_id}/resume-download",
+    summary="Get candidate resume URL for download (HR only)",
+)
+async def get_candidate_resume_url(
+    candidate_id: uuid.UUID,
+    current_user: User = Depends(require_role(*_HR_ROLES)),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.candidate import CandidateProfile
+    profile = await db.scalar(
+        select(CandidateProfile).where(CandidateProfile.id == candidate_id)
+    )
+    if not profile:
+        raise HTTPException(404, "Candidate not found")
+    if not profile.resume_url:
+        raise HTTPException(404, "No resume uploaded by this candidate")
+    return {
+        "resume_url": profile.resume_url,
+        "resume_filename": profile.resume_filename or "resume.pdf",
+    }
