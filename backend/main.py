@@ -195,6 +195,54 @@ def create_app() -> FastAPI:
     async def health_check() -> JSONResponse:
         return JSONResponse({"status": "ok"})
 
+    # ---- Prometheus metrics --------------------------------------------------
+    @application.get(
+        "/metrics",
+        tags=["system"],
+        summary="Prometheus metrics",
+        include_in_schema=False,
+    )
+    async def prometheus_metrics(request: Request):
+        try:
+            from prometheus_client import generate_latest, CONTENT_TYPE_LATEST  # type: ignore
+            from starlette.responses import Response as _Resp
+
+            # Refresh live gauges before generating output
+            try:
+                from app.core.telemetry import (
+                    update_gauge_active_ws,
+                    update_gauge_active_jobs,
+                    update_gauge_candidates,
+                )
+                from app.core.websocket_manager import ws_manager
+                from app.db.session import AsyncSessionLocal
+                from sqlalchemy import func, select
+
+                update_gauge_active_ws(len(ws_manager.active_connections))
+
+                async with AsyncSessionLocal() as _db:
+                    from app.models.job import Job, JobStatus
+                    from app.models.candidate import CandidateProfile
+
+                    active_jobs = await _db.scalar(
+                        select(func.count()).select_from(Job).where(Job.status == JobStatus.ACTIVE)
+                    )
+                    total_candidates = await _db.scalar(
+                        select(func.count()).select_from(CandidateProfile)
+                    )
+                    update_gauge_active_jobs(active_jobs or 0)
+                    update_gauge_candidates(total_candidates or 0)
+            except Exception:
+                pass
+
+            data = generate_latest()
+            return _Resp(content=data, media_type=CONTENT_TYPE_LATEST)
+        except ImportError:
+            return JSONResponse(
+                {"error": "prometheus_client not installed — pip install prometheus-client"},
+                status_code=501,
+            )
+
     return application
 
 
