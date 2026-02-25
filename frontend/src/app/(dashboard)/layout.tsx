@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { authAPI } from "@/lib/api";
 import { clearToken, getSessionUser, type UserRole } from "@/lib/auth";
 import ChatbotWidget from "@/components/ai/ChatbotWidget";
+import { useRealtimeEvents, RealtimeContext } from "@/hooks/useRealtimeEvents";
 
 interface NavItem {
   label: string;
@@ -44,6 +45,8 @@ export default function DashboardLayout({
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+
+  const realtime = useRealtimeEvents();
 
   useEffect(() => {
     // Read role from sessionStorage instantly (no network call needed)
@@ -115,6 +118,25 @@ export default function DashboardLayout({
         {/* User footer */}
         <div className="px-4 py-4 border-t border-gray-200">
           <p className="text-xs text-gray-500 truncate mb-2">{userEmail}</p>
+          {/* WebSocket connection status */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <span
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                realtime.status === "connected"
+                  ? "bg-green-500"
+                  : realtime.status === "connecting"
+                  ? "bg-yellow-400 animate-pulse"
+                  : "bg-gray-400"
+              }`}
+            />
+            <span className="text-xs text-gray-400">
+              {realtime.status === "connected"
+                ? "Live"
+                : realtime.status === "connecting"
+                ? "Connecting…"
+                : "Offline"}
+            </span>
+          </div>
           <button
             onClick={handleLogout}
             className="w-full text-left text-sm text-red-600 hover:text-red-800 transition-colors"
@@ -125,7 +147,9 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <RealtimeContext.Provider value={realtime}>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </RealtimeContext.Provider>
 
       {/* AI Chatbot — candidate only */}
       {userRole === "candidate" && <ChatbotWidget />}

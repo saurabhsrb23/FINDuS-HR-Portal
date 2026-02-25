@@ -135,6 +135,21 @@ class JobService:
             "status": JobStatus.ACTIVE,
             "published_at": datetime.now(tz=timezone.utc),
         })
+
+        # Real-time event: notify all users that a new job is live
+        try:
+            from app.core.event_emitter import emit_event
+            await emit_event(
+                "new_job_posted",
+                {
+                    "job_id": str(job_id),
+                    "title": getattr(job, "title", ""),
+                    "location": getattr(job, "location", ""),
+                },
+            )
+        except Exception:
+            pass
+
         return JobResponse.model_validate(job)
 
     async def pause_job(

@@ -86,6 +86,19 @@ class AuthService:
             )
 
         log.info("user_registered", user_id=str(user.id), role=user.role.value)
+
+        # Real-time event: notify HR users when a new candidate registers
+        if user.role.value == "candidate":
+            try:
+                from app.core.event_emitter import emit_event
+                await emit_event(
+                    "new_candidate_registered",
+                    {"user_id": str(user.id), "name": user.full_name, "email": user.email},
+                    target_role="hr_all",
+                )
+            except Exception:
+                pass
+
         return UserResponse.model_validate(user)
 
     # ─── Login ────────────────────────────────────────────────────────────────

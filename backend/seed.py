@@ -64,6 +64,7 @@ CP7  = uuid.UUID("00000000-0000-0000-0003-000000000007")
 CP8  = uuid.UUID("00000000-0000-0000-0003-000000000008")
 CP9  = uuid.UUID("00000000-0000-0000-0003-000000000009")
 CP10 = uuid.UUID("00000000-0000-0000-0003-000000000010")
+CP0  = uuid.UUID("00000000-0000-0000-0003-000000000000")  # candidate@donehr.com profile
 
 def dt(year: int, month: int, day: int) -> datetime:
     return datetime(year, month, day, tzinfo=timezone.utc)
@@ -893,6 +894,110 @@ async def seed2(session) -> None:
 
 
 
+async def seed3(session) -> None:
+    """Idempotent: add CandidateProfile + applications for the original
+    candidate@donehr.com test account (U_CAND / CP0)."""
+    existing_profile = await session.scalar(
+        select(CandidateProfile).where(CandidateProfile.user_id == U_CAND)
+    )
+    if existing_profile:
+        log.info("seed3_skipped", reason="candidate@donehr.com profile already exists")
+        return
+
+    # Require jobs to exist
+    job_count = await session.scalar(select(func.count()).select_from(Job))
+    if job_count == 0:
+        log.info("seed3_skipped", reason="no jobs in DB — run seed2 first")
+        return
+
+    profile = CandidateProfile(
+        id=CP0,
+        user_id=U_CAND,
+        full_name="Demo Candidate",
+        headline="Full Stack Developer | 5 Years Experience",
+        summary=(
+            "Passionate full stack developer with 5 years of experience building "
+            "scalable web applications. Proficient in Python, React, and PostgreSQL."
+        ),
+        location="Bangalore, India",
+        phone="+91-9876543200",
+        years_of_experience=5.0,
+        desired_role="Full Stack Developer",
+        desired_salary_min=800000,
+        desired_salary_max=1500000,
+        notice_period_days=30,
+        open_to_remote=True,
+        work_preference="hybrid",
+        profile_strength=78,
+    )
+    session.add(profile)
+    await session.flush()
+
+    skills = [
+        CandidateSkill(id=uuid.uuid4(), candidate_id=CP0, skill_name="Python",     proficiency=80, years_exp=4.0),
+        CandidateSkill(id=uuid.uuid4(), candidate_id=CP0, skill_name="React",      proficiency=75, years_exp=3.0),
+        CandidateSkill(id=uuid.uuid4(), candidate_id=CP0, skill_name="Node.js",    proficiency=70, years_exp=3.0),
+        CandidateSkill(id=uuid.uuid4(), candidate_id=CP0, skill_name="PostgreSQL", proficiency=72, years_exp=4.0),
+        CandidateSkill(id=uuid.uuid4(), candidate_id=CP0, skill_name="Docker",     proficiency=65, years_exp=2.0),
+    ]
+    session.add_all(skills)
+
+    edu = Education(
+        id=uuid.uuid4(), candidate_id=CP0,
+        institution="Mumbai University",
+        degree="B.Tech", field_of_study="Computer Science",
+        grade="7.5 CGPA", start_year=2016, end_year=2020,
+    )
+    session.add(edu)
+
+    exp = WorkExperience(
+        id=uuid.uuid4(), candidate_id=CP0,
+        company_name="Infosys Ltd", job_title="Software Developer",
+        location="Bangalore, India", is_current=True,
+        start_date=dt(2020, 7, 1), end_date=None,
+        description="Building enterprise web apps with React and Python.",
+        achievements=["Reduced API response time by 40%", "Led Docker migration"],
+    )
+    session.add(exp)
+    await session.flush()
+
+    # Get pipeline stage IDs for J1 and J3
+    stage_j1 = await session.scalar(
+        select(PipelineStage).where(PipelineStage.job_id == J1, PipelineStage.stage_order == 0)
+    )
+    stage_j3 = await session.scalar(
+        select(PipelineStage).where(PipelineStage.job_id == J3, PipelineStage.stage_order == 1)
+    )
+
+    apps = []
+    if stage_j1:
+        apps.append(Application(
+            id=uuid.uuid4(), job_id=J1, candidate_id=CP0,
+            status=ApplicationStatus.APPLIED,
+            cover_letter="5+ years full stack experience in Python and React. Eager to contribute to TechCorp.",
+            resume_url="seeded",
+            timeline=[{"status": "applied", "timestamp": dt(2026, 2, 20).isoformat(), "note": "Applied via portal"}],
+            pipeline_stage_id=stage_j1.id,
+        ))
+    if stage_j3:
+        apps.append(Application(
+            id=uuid.uuid4(), job_id=J3, candidate_id=CP0,
+            status=ApplicationStatus.SCREENING,
+            cover_letter="Strong Python background and ML interest make me a great fit for this role.",
+            resume_url="seeded",
+            timeline=[
+                {"status": "applied",   "timestamp": dt(2026, 2, 15).isoformat(), "note": "Applied via portal"},
+                {"status": "screening", "timestamp": dt(2026, 2, 17).isoformat(), "note": "Resume shortlisted"},
+            ],
+            pipeline_stage_id=stage_j3.id,
+        ))
+
+    if apps:
+        session.add_all(apps)
+    await session.commit()
+    log.info("seed3_complete", profile_id=str(CP0), applications=len(apps))
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -916,6 +1021,10 @@ async def seed() -> None:
                 reason="extended seed already ran",
                 user_count=user_count,
             )
+
+    # seed3 always runs — idempotent (adds data for candidate@donehr.com if missing)
+    async with AsyncSessionLocal() as session:
+        await seed3(session)
 
 
 if __name__ == "__main__":

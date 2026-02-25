@@ -9,6 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.application import Application, ApplicationStatus, JobAlert
+from app.models.company import Company
 from app.models.job import Job, JobStatus
 from app.repositories.application_repository import ApplicationRepository
 from app.repositories.candidate_repository import CandidateRepository
@@ -150,6 +151,23 @@ class ApplicationService:
         await self._db.commit()
         await self._db.refresh(application)
         log.info("application_submitted", user_id=str(user_id), job_id=str(job_id))
+
+        # Real-time event: notify HR that a new application arrived
+        try:
+            from app.core.event_emitter import emit_event
+            await emit_event(
+                "new_application",
+                {
+                    "application_id": str(application.id),
+                    "job_id": str(job_id),
+                    "candidate_id": str(profile.id),
+                    "candidate_name": profile.full_name,
+                },
+                target_role="hr_all",
+            )
+        except Exception:
+            pass
+
         return application
 
     # ── My applications ───────────────────────────────────────────────────────
@@ -163,9 +181,15 @@ class ApplicationService:
 
         items: list[ApplicationListItem] = []
         for app in applications:
-            # Join job details
-            job_result = await self._db.execute(select(Job).where(Job.id == app.job_id))
-            job = job_result.scalar_one_or_none()
+            # Join job + company details
+            job_result = await self._db.execute(
+                select(Job, Company.name.label("company_name"))
+                .outerjoin(Company, Job.company_id == Company.id)
+                .where(Job.id == app.job_id)
+            )
+            row = job_result.first()
+            job = row[0] if row else None
+            company_name = row[1] if row else None
             items.append(
                 ApplicationListItem(
                     id=app.id,
@@ -174,7 +198,7 @@ class ApplicationService:
                     applied_at=app.applied_at,
                     updated_at=app.updated_at,
                     job_title=job.title if job else None,
-                    company_name=job.company_name if job else None,
+                    company_name=company_name,
                     job_location=job.location if job else None,
                 )
             )

@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getSessionUser, type UserRole } from "@/lib/auth";
 import { candidateAPI } from "@/lib/candidateAPI";
 import { applicationAPI } from "@/lib/applicationAPI";
+import { getAnalyticsSummary } from "@/lib/jobsAPI";
 import type { ProfileStrength } from "@/types/candidate";
+import type { AnalyticsSummary } from "@/types/job";
+import LiveCounterBadge from "@/components/shared/LiveCounterBadge";
+import LiveActivityFeed from "@/components/shared/LiveActivityFeed";
+import { useRealtime } from "@/hooks/useRealtimeEvents";
 
 const HR_ROLES = new Set<UserRole>([
   "hr", "hr_admin", "hiring_manager", "recruiter", "superadmin", "admin", "elite_admin",
@@ -39,12 +44,44 @@ function StrengthRing({ score }: { score: number }) {
   );
 }
 
+// ── Toast notification (candidate) ────────────────────────────────────────────
+interface Toast {
+  id: number;
+  message: string;
+  icon: string;
+}
+
+function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  if (!toasts.length) return null;
+  return (
+    <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className="flex items-center gap-2 bg-white border border-gray-200 shadow-lg rounded-lg px-4 py-3 text-sm text-gray-800 animate-slide-in"
+        >
+          <span>{t.icon}</span>
+          <span>{t.message}</span>
+          <button onClick={() => onDismiss(t.id)} className="ml-2 text-gray-400 hover:text-gray-600 text-xs">
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [name, setName] = useState("");
   const [strength, setStrength] = useState<ProfileStrength | null>(null);
   const [appCount, setAppCount] = useState<number | null>(null);
   const [jobCount, setJobCount] = useState<number | null>(null);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
+
+  const { subscribe, unsubscribe, events } = useRealtime();
 
   useEffect(() => {
     const session = getSessionUser();
@@ -64,10 +101,44 @@ export default function DashboardPage() {
     ]);
   }, [role]);
 
+  // Load HR analytics summary
+  useEffect(() => {
+    if (!role || !HR_ROLES.has(role)) return;
+    getAnalyticsSummary().then(setSummary).catch(() => {});
+  }, [role]);
+
+  // Candidate: show toast when profile is viewed or status changes
+  const addToast = useCallback((message: string, icon: string) => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, icon }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!role || HR_ROLES.has(role)) return;
+
+    const onProfileViewed = () => addToast("An HR viewed your profile!", "👀");
+    const onShortlisted = () => addToast("You've been shortlisted for a job!", "🎉");
+    const onInterview = () => addToast("Interview scheduled — check your applications.", "📅");
+    const onNewJob = () => setJobCount(prev => (prev !== null ? prev + 1 : prev));
+
+    subscribe("profile_viewed", onProfileViewed);
+    subscribe("shortlisted", onShortlisted);
+    subscribe("interview_scheduled", onInterview);
+    subscribe("new_job_posted", onNewJob);
+
+    return () => {
+      unsubscribe("profile_viewed", onProfileViewed);
+      unsubscribe("shortlisted", onShortlisted);
+      unsubscribe("interview_scheduled", onInterview);
+      unsubscribe("new_job_posted", onNewJob);
+    };
+  }, [role, subscribe, unsubscribe, addToast]);
+
   const isHR = role && HR_ROLES.has(role);
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-8 max-w-5xl">
       <h1 className="text-2xl font-bold text-gray-900">
         Welcome back, {name || "there"}!
       </h1>
@@ -78,23 +149,78 @@ export default function DashboardPage() {
       {isHR ? (
         <>
           <p className="mt-4 text-gray-600">Manage your hiring pipeline from here.</p>
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Link
-              href="/dashboard/jobs"
-              className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <span className="text-2xl">💼</span>
-              <span className="font-semibold text-gray-900">Job Postings</span>
-              <span className="text-sm text-gray-500">Create and manage jobs</span>
-            </Link>
-            <Link
-              href="/dashboard/analytics"
-              className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <span className="text-2xl">📊</span>
-              <span className="font-semibold text-gray-900">Analytics</span>
-              <span className="text-sm text-gray-500">Recruiter metrics</span>
-            </Link>
+
+          {/* Live KPI cards */}
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <LiveCounterBadge
+                value={summary?.total_jobs ?? null}
+                label="Total Jobs"
+                icon="💼"
+                onUpdate={(v) => setSummary(prev => prev ? { ...prev, total_jobs: v } : prev)}
+              />
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <LiveCounterBadge
+                value={summary?.active_jobs ?? null}
+                label="Active Jobs"
+                icon="🟢"
+                colorClass="text-green-600"
+                eventTypes={["new_job_posted"]}
+                onUpdate={(v) => setSummary(prev => prev ? { ...prev, active_jobs: v } : prev)}
+              />
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <LiveCounterBadge
+                value={summary?.total_applications ?? null}
+                label="Applications"
+                icon="📄"
+                colorClass="text-indigo-600"
+                eventTypes={["new_application"]}
+                onUpdate={(v) => setSummary(prev => prev ? { ...prev, total_applications: v } : prev)}
+              />
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <LiveCounterBadge
+                value={summary?.total_views ?? null}
+                label="Job Views"
+                icon="👁️"
+                colorClass="text-purple-600"
+              />
+            </div>
+          </div>
+
+          {/* Two-column: quick links + live feed */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+              <Link
+                href="/dashboard/jobs"
+                className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <span className="text-2xl">💼</span>
+                <span className="font-semibold text-gray-900">Job Postings</span>
+                <span className="text-sm text-gray-500">Create and manage jobs</span>
+              </Link>
+              <Link
+                href="/dashboard/search"
+                className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <span className="text-2xl">🔎</span>
+                <span className="font-semibold text-gray-900">Find Candidates</span>
+                <span className="text-sm text-gray-500">Search the talent pool</span>
+              </Link>
+              <Link
+                href="/dashboard/analytics"
+                className="flex flex-col gap-1 p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow sm:col-span-2"
+              >
+                <span className="text-2xl">📊</span>
+                <span className="font-semibold text-gray-900">Analytics</span>
+                <span className="text-sm text-gray-500">Recruiter metrics &amp; insights</span>
+              </Link>
+            </div>
+
+            {/* Live activity feed */}
+            <LiveActivityFeed events={events} maxHeight="260px" title="Live Activity" />
           </div>
         </>
       ) : (
@@ -128,20 +254,29 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Active applications */}
+            {/* Active applications — live counter */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <p className="text-xs text-gray-500">My Applications</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{appCount ?? "—"}</p>
-              <Link href="/dashboard/my-applications" className="text-xs text-indigo-600 hover:underline mt-1 block">
+              <LiveCounterBadge
+                value={appCount}
+                label="My Applications"
+                icon="📄"
+                colorClass="text-indigo-600"
+              />
+              <Link href="/dashboard/my-applications" className="text-xs text-indigo-600 hover:underline mt-2 block">
                 View all →
               </Link>
             </div>
 
-            {/* Open jobs */}
+            {/* Open jobs — live counter */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-              <p className="text-xs text-gray-500">Open Positions</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{jobCount ?? "—"}</p>
-              <Link href="/dashboard/browse-jobs" className="text-xs text-indigo-600 hover:underline mt-1 block">
+              <LiveCounterBadge
+                value={jobCount}
+                label="Open Positions"
+                icon="💼"
+                eventTypes={["new_job_posted"]}
+                onUpdate={setJobCount}
+              />
+              <Link href="/dashboard/browse-jobs" className="text-xs text-indigo-600 hover:underline mt-2 block">
                 Browse jobs →
               </Link>
             </div>
@@ -198,6 +333,9 @@ export default function DashboardPage() {
           )}
         </>
       )}
+
+      {/* Toast notifications (candidate only) */}
+      <ToastContainer toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 """FindUs — FastAPI application entry point (Module 2: Auth wired in)."""
 from __future__ import annotations
 
+import asyncio as _asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -19,7 +20,7 @@ from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.core.rate_limiter import limiter
 from app.core.redis_client import close_redis, init_redis
 
-# ─── OpenTelemetry setup ──────────────────────────────────────────────────────
+# ---- OpenTelemetry setup ----------------------------------------------------
 try:
     from opentelemetry import trace
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -51,7 +52,7 @@ def _setup_otel(app: FastAPI) -> None:
     SQLAlchemyInstrumentor().instrument(tracer_provider=provider)
 
 
-# ─── Lifespan ─────────────────────────────────────────────────────────────────
+# ---- Lifespan ----------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup and shutdown logic."""
@@ -66,17 +67,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         log.warning("redis_connection_failed", error=str(exc))
 
+    # WebSocket Redis subscriber (Module 7)
+    from app.core.websocket_manager import ws_manager
+    _ws_sub_task = _asyncio.create_task(ws_manager.start_redis_subscriber())
+    log.info("ws_redis_subscriber_started")
+
     yield
+
+    # Shutdown
+    _ws_sub_task.cancel()
+    try:
+        await _ws_sub_task
+    except _asyncio.CancelledError:
+        pass
 
     await close_redis()
     log.info("shutting_down")
 
 
-# ─── Application factory ──────────────────────────────────────────────────────
+# ---- Application factory -----------------------------------------------------
 def create_app() -> FastAPI:
     application = FastAPI(
         title="FindUs API",
-        description="AI-powered HR portal — REST API",
+        description="AI-powered HR portal -- REST API",
         version="1.0.0",
         docs_url="/docs" if not settings.is_production else None,
         redoc_url="/redoc" if not settings.is_production else None,
@@ -84,12 +97,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ─── Rate limiter state + exception handler ────────────────────────────────
+    # ---- Rate limiter state + exception handler ------------------------------
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(SlowAPIMiddleware)
 
-    # ─── CORS ─────────────────────────────────────────────────────────────────
+    # ---- CORS ----------------------------------------------------------------
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.FRONTEND_URL],
@@ -104,14 +117,14 @@ def create_app() -> FastAPI:
         ],
     )
 
-    # ─── Request / structured logging ─────────────────────────────────────────
+    # ---- Request / structured logging ----------------------------------------
     application.add_middleware(RequestLoggingMiddleware)
 
-    # ─── OpenTelemetry ────────────────────────────────────────────────────────
+    # ---- OpenTelemetry -------------------------------------------------------
     _setup_otel(application)
 
-    # ─── Ensure all models are registered in Base.metadata so FK references
-    #     resolve correctly (e.g. jobs.company_id → companies.id)
+    # ---- Ensure all models are registered in Base.metadata so FK references
+    #      resolve correctly (e.g. jobs.company_id -> companies.id)
     import app.models.audit_log    # noqa: F401
     import app.models.company      # noqa: F401
     import app.models.job          # noqa: F401
@@ -121,13 +134,14 @@ def create_app() -> FastAPI:
     import app.models.ai_summary   # noqa: F401
     import app.models.saved_search  # noqa: F401
 
-    # ─── Routers ──────────────────────────────────────────────────────────────
+    # ---- Routers -------------------------------------------------------------
     from app.routers.auth import router as auth_router
     from app.routers.jobs import analytics_router, router as jobs_router
     from app.routers.candidates import router as candidates_router
     from app.routers.applications import router as applications_router
     from app.routers.ai import router as ai_router
     from app.routers.search import router as search_router
+    from app.routers.ws import router as ws_router
 
     application.include_router(auth_router)
     # applications_router must be before jobs_router so /jobs/search (static)
@@ -138,8 +152,9 @@ def create_app() -> FastAPI:
     application.include_router(candidates_router)
     application.include_router(ai_router)
     application.include_router(search_router)
+    application.include_router(ws_router)
 
-    # ─── Global exception handler — ensures CORS headers on every 500 ─────────
+    # ---- Global exception handler --- ensures CORS headers on every 500 ------
     @application.exception_handler(Exception)
     async def _unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
         _log.error(
@@ -153,7 +168,7 @@ def create_app() -> FastAPI:
             content={"detail": "Internal server error. Please try again."},
         )
 
-    # ─── Health check ─────────────────────────────────────────────────────────
+    # ---- Health check --------------------------------------------------------
     @application.get(
         "/health",
         tags=["system"],
