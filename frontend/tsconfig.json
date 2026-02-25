@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    /* ── Language & Environment ─────────────────────────────────────── */
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "preserve",
+
+    /* ── Module resolution ──────────────────────────────────────────── */
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+
+    /* ── Strict mode — all flags on ─────────────────────────────────── */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+
+    /* ── Emit ───────────────────────────────────────────────────────── */
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+
+    /* ── Path aliases ───────────────────────────────────────────────── */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/components/*": ["./src/components/*"],
+      "@/lib/*": ["./src/lib/*"],
+      "@/hooks/*": ["./src/hooks/*"],
+      "@/types/*": ["./src/types/*"],
+      "@/styles/*": ["./src/styles/*"],
+      "@/store/*": ["./src/store/*"],
+      "@/utils/*": ["./src/utils/*"]
+    },
+
+    /* ── Next.js plugin ─────────────────────────────────────────────── */
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+
+    /* ── Source maps ────────────────────────────────────────────────── */
+    "sourceMap": true,
+    "inlineSources": true
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", ".next", "out", "coverage", "jest.setup.ts", "jest.config.js", "tests/**"]
+}
